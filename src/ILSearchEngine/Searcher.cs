@@ -13,18 +13,21 @@ public class Searcher
         this.options = options;
     }
 
-    public void Search()
+    public IEnumerable<SearchResult> Search()
     {
         var assemblyResolver = this.BuildAssemblyResolver();
         var readerParameters = new ReaderParameters { AssemblyResolver = assemblyResolver };
 
         foreach (var assemblyFileInfo in EnumerateAssemblies(this.options))
         {
-            this.Search(readerParameters, assemblyFileInfo);
+            foreach (var searchResult in this.Search(readerParameters, assemblyFileInfo))
+            {
+                yield return searchResult;
+            }
         }
     }
 
-    private void Search(ReaderParameters readerParameters, FileInfo assemblyFileInfo)
+    private IEnumerable<SearchResult> Search(ReaderParameters readerParameters, FileInfo assemblyFileInfo)
     {
         // Ignore bad assemblies. Probably non .NET.
         AssemblyDefinition assemblyDefinition;
@@ -34,13 +37,16 @@ public class Searcher
         }
         catch (BadImageFormatException)
         {
-            return;
+            yield break;
         }
 
         if (this.IsSearchAssembly(assemblyDefinition) || this.AssemblyReferencesTargetAssembly(assemblyDefinition))
         {
             Console.WriteLine($"Searching {assemblyDefinition.FullName}");
-            this.Search(assemblyDefinition);
+            foreach (var searchResult in this.Search(assemblyDefinition))
+            {
+                yield return searchResult;
+            }
         }
         else
         {
@@ -67,26 +73,32 @@ public class Searcher
         return false;
     }
 
-    private void Search(AssemblyDefinition assemblyDefinition)
+    private IEnumerable<SearchResult> Search(AssemblyDefinition assemblyDefinition)
     {
         foreach (var methodDefinition in EnumerateMethodsWithBodies(this.options, assemblyDefinition))
         {
-            Search(assemblyDefinition, methodDefinition);
+            foreach (var searchResult in Search(methodDefinition))
+            {
+                yield return searchResult;
+            }
         }
     }
 
-    private void Search(AssemblyDefinition assemblyDefinition, MethodDefinition methodDefinition)
+    internal IEnumerable<SearchResult> Search(MethodDefinition methodDefinition)
     {
         //Mono.Cecil.Rocks.ILParser.Parse(method, visitor);
 
         var methodBody = methodDefinition.Body;
         foreach (var instruction in methodBody.Instructions)
         {
-            Search(assemblyDefinition, methodBody, instruction);
+            foreach (var searchResult in Search(methodBody, instruction))
+            {
+                yield return searchResult;
+            }
         }
     }
 
-    private void Search(AssemblyDefinition assemblyDefinition, MethodBody methodBody, Instruction instruction)
+    private IEnumerable<SearchResult> Search(MethodBody methodBody, Instruction instruction)
     {
         if (instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Calli || instruction.OpCode == OpCodes.Callvirt)
         {
@@ -98,17 +110,13 @@ public class Searcher
                     var methodDefinition = methodReference.Resolve();
                     if (methodDefinition.DeclaringType.Module.Assembly.FullName == this.options.TargetAssembly.FullName)
                     {
-                        foreach (var propertyDefinition in this.options.Properties)
+                        foreach (var thisMethod in this.options.Methods)
                         {
-                            if (propertyDefinition.DeclaringType.FullName == methodDefinition.DeclaringType.FullName)
+                            if (thisMethod.DeclaringType.FullName == methodDefinition.DeclaringType.FullName)
                             {
-                                if (propertyDefinition.GetMethod.FullName == methodDefinition.FullName)
+                                if (thisMethod.FullName == methodDefinition.FullName)
                                 {
-                                    Console.WriteLine($"{methodBody.Method.FullName} called Get on {propertyDefinition.FullName}");
-                                }
-                                else if (propertyDefinition.SetMethod.FullName == methodDefinition.FullName)
-                                {
-                                    Console.WriteLine($"{methodBody.Method.FullName} called Set on {propertyDefinition.FullName}");
+                                    yield return new SearchResult(thisMethod, methodBody.Method);
                                 }
                             }
                         }

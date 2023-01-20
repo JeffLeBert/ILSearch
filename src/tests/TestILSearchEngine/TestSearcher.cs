@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+using ILSearch.Search;
 using Mono.Cecil;
 using Xunit;
 
@@ -10,6 +12,19 @@ public class When_searching_for_properties
     [Fact]
     public void Can_find_a_public_instance_property_getter()
     {
+        var propertyGetter = targetsTypeDef.Properties
+            .First(def => def.Name == nameof(Targets.PublicInstanceProperty))
+            .GetMethod;
+        var options = TargetsHelper.BuildSearchOptions()
+            with { Methods = ImmutableArray<MethodDefinition>.Empty.Add(propertyGetter) };
+
+        var searcher = new Searcher(options);
+        var targetMethod = targetsTypeDef.Methods.First(def => def.Name == nameof(Targets.PublicInstanceProperty_calls_getter));
+        var results = searcher.Search(targetMethod).ToList();
+
+        var result = Assert.Single(results);
+        Assert.Same(propertyGetter, result.CallTarget);
+        Assert.Same(targetMethod, result.CallSource);
     }
 }
 

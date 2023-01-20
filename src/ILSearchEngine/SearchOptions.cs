@@ -9,7 +9,5 @@ public record SearchOptions
 
     public ImmutableArray<MethodDefinition> Methods { get; init; }
 
-    public ImmutableArray<PropertyDefinition> Properties { get; init; }
-
     public ImmutableArray<DirectoryInfo> SearchDirectories { get; init; }
 }
