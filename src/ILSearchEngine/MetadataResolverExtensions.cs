@@ -1,7 +1,7 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using Mono.Cecil;
 
-namespace ILSearch.Search;
+namespace ILSearch.Engine;
 
 internal static class MetadataResolverExtensions
 {

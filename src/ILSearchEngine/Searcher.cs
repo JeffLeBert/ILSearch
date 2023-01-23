@@ -1,8 +1,8 @@
-﻿using ILSearch.Engine;
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
+using Mono.Cecil.Rocks;
 
-namespace ILSearch.Search;
+namespace ILSearch.Engine;
 
 public class Searcher
 {
@@ -86,44 +86,10 @@ public class Searcher
 
     internal IEnumerable<SearchResult> Search(MethodDefinition methodDefinition)
     {
-        //Mono.Cecil.Rocks.ILParser.Parse(method, visitor);
+        var ilVisitor = new ILVisitor(methodDefinition, this.options);
+        ILParser.Parse(methodDefinition, ilVisitor);
 
-        var methodBody = methodDefinition.Body;
-        foreach (var instruction in methodBody.Instructions)
-        {
-            foreach (var searchResult in Search(methodBody, instruction))
-            {
-                yield return searchResult;
-            }
-        }
-    }
-
-    private IEnumerable<SearchResult> Search(MethodBody methodBody, Instruction instruction)
-    {
-        if (instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Calli || instruction.OpCode == OpCodes.Callvirt)
-        {
-            var methodReference = (MethodReference)instruction.Operand;
-            if (methodBody.Method.Module.MetadataResolver.TryResolve(methodReference, out var resolvedMethodReference))
-            {
-                if (resolvedMethodReference.DeclaringType.Module.Assembly.FullName == this.options.TargetAssembly.FullName)
-                {
-                    var methodDefinition = methodReference.Resolve();
-                    if (methodDefinition.DeclaringType.Module.Assembly.FullName == this.options.TargetAssembly.FullName)
-                    {
-                        foreach (var thisMethod in this.options.Methods)
-                        {
-                            if (thisMethod.DeclaringType.FullName == methodDefinition.DeclaringType.FullName)
-                            {
-                                if (thisMethod.FullName == methodDefinition.FullName)
-                                {
-                                    yield return new SearchResult(thisMethod, methodBody.Method);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        return ilVisitor.SearchResults;
     }
 
     private DefaultAssemblyResolver BuildAssemblyResolver()
